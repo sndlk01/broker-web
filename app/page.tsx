@@ -8,6 +8,7 @@ import {
   Grid,
   Heading,
   HStack,
+  Image,
   Input,
   Link,
   Spinner,
@@ -57,13 +58,12 @@ function BrokerArtwork({
 
   if (broker.logo_url) {
     return (
-      <Box
-        as="img"
+      <Image
         src={broker.logo_url}
         alt={`${broker.name} logo`}
         w="full"
         h="full"
-        objectFit="cover"
+        fit="cover"
         filter="grayscale(1)"
       />
     );

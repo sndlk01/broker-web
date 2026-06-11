@@ -7,6 +7,7 @@ import {
   Flex,
   Grid,
   Heading,
+  Image,
   Link,
   Spinner,
   Text,
@@ -101,14 +102,13 @@ export default function BrokerDetailPage() {
             bg="#0f1f35"
           >
             {broker.logo_url ? (
-              <Box
-                as="img"
+              <Image
                 src={broker.logo_url}
                 alt={`${broker.name} logo`}
                 w="full"
                 h="full"
                 minH="420px"
-                objectFit="cover"
+                fit="cover"
                 filter="grayscale(1)"
               />
             ) : (
