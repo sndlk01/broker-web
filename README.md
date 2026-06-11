@@ -1,36 +1,123 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Broker Web
 
-## Getting Started
+## Requirements
 
-First, run the development server:
+- Bun
+- Node.js ที่รองรับ Next.js 16
+- Backend API ที่รันอยู่ เช่น `http://localhost:3030/api/web`
+
+## Install
+
+ติดตั้ง dependencies:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+สร้างหรือแก้ไฟล์ `.env` ที่ root ของโปรเจกต์:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3030/api/web
+```
 
-## Learn More
+ตัวแปรนี้ต้องขึ้นต้นด้วย `NEXT_PUBLIC_` เพราะ frontend เรียก API จาก client component
 
-To learn more about Next.js, take a look at the following resources:
+## Run Development
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+รัน frontend:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+bun run dev
+```
 
-## Deploy on Vercel
+เปิดเว็บ:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```txt
+http://localhost:3000
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+ถ้าต้องการใช้ port อื่น:
+
+```bash
+bun run dev -- -p 3001
+```
+
+## Backend API
+
+frontend คาดหวัง API ตาม path เหล่านี้ภายใต้ `NEXT_PUBLIC_API_URL`:
+
+```txt
+GET  /health
+POST /auth/register
+POST /auth/login
+GET  /brokers
+GET  /brokers/:slug
+POST /brokers
+```
+
+ตัวอย่าง base URL:
+
+```txt
+http://localhost:3030/api/web
+```
+
+ดังนั้น endpoint เต็มจะเป็น:
+
+```txt
+http://localhost:3030/api/web/auth/login
+http://localhost:3030/api/web/brokers
+```
+
+## Auth Flow
+
+- Login เรียก `POST /auth/login`
+- response ต้องมี `access_token`
+- token ถูกเก็บใน `localStorage` และ cookie ชื่อ `broker-web-token`
+- Next.js `proxy.ts` ใช้ cookie เพื่อตรวจว่าเข้า protected route ได้หรือไม่
+- request ไป broker API จะส่ง header:
+
+```txt
+Authorization: Bearer <access_token>
+```
+
+## Routes
+
+```txt
+/                 Broker list
+/login            Login
+/register         Register
+/create           Create broker
+/broker/[slug]    Broker detail
+```
+
+protected routes:
+
+```txt
+/
+/create
+/broker/[slug]
+```
+
+ถ้าไม่มี token จะถูก redirect ไป `/login`
+
+## Scripts
+
+ตรวจ lint:
+
+```bash
+bun run lint
+```
+
+build production:
+
+```bash
+bun run build
+```
+
+run production หลัง build:
+
+```bash
+bun run start
+```
