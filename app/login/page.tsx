@@ -13,7 +13,8 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { AppShell } from "../components/AppShell";
 import { login } from "@/lib/api";
-import { saveAuthToken } from "@/lib/client-auth";
+import { saveAuthToken, saveUserEmail } from "@/lib/client-auth";
+import { toaster } from "@/lib/toaster";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,6 +38,13 @@ export default function LoginPage() {
       }
 
       saveAuthToken(token);
+      saveUserEmail(email);
+      toaster.create({
+        title: "Logged in",
+        description: `Welcome back, ${email}`,
+        type: "success",
+        duration: 3000,
+      });
       const nextPath = new URLSearchParams(window.location.search).get("next");
       router.push(nextPath ?? "/create");
     } catch (error) {

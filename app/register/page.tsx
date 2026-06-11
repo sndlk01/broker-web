@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { AppShell } from "../components/AppShell";
 import { register } from "@/lib/api";
+import { toaster } from "@/lib/toaster";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -36,6 +37,12 @@ export default function RegisterPage() {
 
     try {
       await register({ full_name: fullName, email, password });
+      toaster.create({
+        title: "Account created",
+        description: "Please log in to continue.",
+        type: "success",
+        duration: 4000,
+      });
       router.push("/login");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Register failed.");
