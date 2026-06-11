@@ -12,10 +12,8 @@ import {
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { AppShell } from "../components/AppShell";
+import { login } from "@/lib/api";
 import { saveAuthToken } from "@/lib/client-auth";
-
-const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3030/api/web";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,30 +27,23 @@ export default function LoginPage() {
     setSubmitting(true);
     setMessage("");
 
-    const response = await fetch(`${apiBaseUrl}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await response.json();
+    try {
+      const data = await login({ email, password });
+      const token = data.access_token ?? data.token;
 
-    setSubmitting(false);
+      if (!token) {
+        setMessage("Login response did not include an access token.");
+        return;
+      }
 
-    if (!response.ok) {
-      setMessage(data.message ?? "Login failed.");
-      return;
+      saveAuthToken(token);
+      const nextPath = new URLSearchParams(window.location.search).get("next");
+      router.push(nextPath ?? "/create");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Login failed.");
+    } finally {
+      setSubmitting(false);
     }
-
-    const token = data.access_token ?? data.token;
-
-    if (!token) {
-      setMessage("Login response did not include an access token.");
-      return;
-    }
-
-    saveAuthToken(token);
-    const nextPath = new URLSearchParams(window.location.search).get("next");
-    router.push(nextPath ?? "/");
   }
 
   return (

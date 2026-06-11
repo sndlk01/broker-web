@@ -9,16 +9,17 @@ import {
   Heading,
   HStack,
   Image,
-  Input,
   Link,
   Spinner,
   Text,
   VStack,
 } from "@chakra-ui/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AppShell } from "./components/AppShell";
-import { clearAuthToken, getAuthToken } from "@/lib/client-auth";
+import { CreateBrokerModal } from "./components/CreateBrokerModal";
+import { ApiError, listBrokers } from "@/lib/api";
+import { clearAuthToken, getAuthToken, hasAuthToken, subscribeAuthToken } from "@/lib/client-auth";
 import type { Broker, BrokerType } from "@/lib/types";
 
 const brokerTypes: Array<BrokerType | "all"> = [
@@ -28,8 +29,6 @@ const brokerTypes: Array<BrokerType | "all"> = [
   "stock",
   "crypto",
 ];
-const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3030/api/web";
 
 function SearchIcon() {
   return (
@@ -76,33 +75,132 @@ function BrokerArtwork({
   );
 }
 
+function EmptyState({
+  hasFilters,
+  onClear,
+}: {
+  hasFilters: boolean;
+  onClear: () => void;
+}) {
+  return (
+    <Flex
+      direction="column"
+      align="center"
+      justify="center"
+      minH="320px"
+      gap="5"
+      rounded="md"
+      border="1px dashed #1e3454"
+      color="#536780"
+    >
+      <Box
+        as="svg"
+        viewBox="0 0 24 24"
+        boxSize="10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0.4}
+      >
+        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+        <rect x="9" y="3" width="6" height="4" rx="1" />
+        <path d="M9 12h6M9 16h4" />
+      </Box>
+      <Box textAlign="center">
+        <Text fontWeight="600" color="#7889a4" mb="1">
+          {hasFilters ? "No brokers match your search" : "No brokers yet"}
+        </Text>
+        <Text fontSize="13px">
+          {hasFilters
+            ? "Try adjusting your search or filter."
+            : "Create the first broker record to get started."}
+        </Text>
+      </Box>
+      {hasFilters ? (
+        <Button
+          size="sm"
+          bg="#12233a"
+          color="#9eacc4"
+          _hover={{ bg: "#1a2d49", color: "white" }}
+          onClick={onClear}
+        >
+          Clear filters
+        </Button>
+      ) : (
+        <Link
+          href="/create"
+          display="inline-flex"
+          alignItems="center"
+          h="9"
+          px="5"
+          rounded="md"
+          bg="#aac8fb"
+          color="#10213a"
+          fontSize="13px"
+          fontWeight="600"
+          _hover={{ bg: "white", textDecoration: "none" }}
+        >
+          Create broker
+        </Link>
+      )}
+    </Flex>
+  );
+}
+
 export default function BrokerListPage() {
   const router = useRouter();
   const [brokers, setBrokers] = useState<Broker[]>([]);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [brokerType, setBrokerType] = useState<BrokerType | "all">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const isAuthenticated = useSyncExternalStore(subscribeAuthToken, hasAuthToken, () => false);
+  const didInitRef = useRef(false);
 
-  const requestUrl = useMemo(() => {
+  // Read initial search/filter from URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const search = params.get("search") ?? "";
+    const type = params.get("type") as BrokerType | null;
+
+    if (search) {
+      setQuery(search);
+      setDebouncedQuery(search);
+    }
+
+    if (type && (["cfd", "bond", "stock", "crypto"] as string[]).includes(type)) {
+      setBrokerType(type);
+    }
+
+    didInitRef.current = true;
+  }, []);
+
+  // Debounce query → debouncedQuery
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 400);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  // Sync search/filter state to URL (skip first render before init)
+  const isFirstSyncRef = useRef(true);
+  useEffect(() => {
+    if (isFirstSyncRef.current) {
+      isFirstSyncRef.current = false;
+      return;
+    }
     const params = new URLSearchParams();
-    const trimmedQuery = query.trim();
+    if (debouncedQuery) params.set("search", debouncedQuery);
+    if (brokerType !== "all") params.set("type", brokerType);
+    const qs = params.toString();
+    router.replace(qs ? `/?${qs}` : "/", { scroll: false });
+  }, [debouncedQuery, brokerType, router]);
 
-    if (trimmedQuery) {
-      params.set("search", trimmedQuery);
-    }
-
-    if (brokerType !== "all") {
-      params.set("type", brokerType);
-    }
-
-    const queryString = params.toString();
-
-    return queryString
-      ? `${apiBaseUrl}/brokers?${queryString}`
-      : `${apiBaseUrl}/brokers`;
-  }, [brokerType, query]);
-
+  // Fetch brokers
   useEffect(() => {
     let cancelled = false;
 
@@ -112,26 +210,21 @@ export default function BrokerListPage() {
 
       try {
         const token = getAuthToken();
-        const response = await fetch(requestUrl, {
-          headers: {
-            Authorization: `Bearer ${token ?? ""}`,
-          },
+        const brokerList = await listBrokers({
+          search: debouncedQuery,
+          type: brokerType,
+          token,
         });
-        const data = await response.json();
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            clearAuthToken();
-            router.push("/login");
-          }
-
-          throw new Error(data.message ?? "Unable to load brokers.");
-        }
 
         if (!cancelled) {
-          setBrokers(data.data ?? data.brokers ?? data);
+          setBrokers(brokerList);
         }
       } catch (loadError) {
+        if (loadError instanceof ApiError && loadError.status === 401) {
+          clearAuthToken();
+          router.push("/login");
+        }
+
         if (!cancelled) {
           setError(
             loadError instanceof Error
@@ -151,82 +244,136 @@ export default function BrokerListPage() {
     return () => {
       cancelled = true;
     };
-  }, [requestUrl, router]);
+  }, [brokerType, debouncedQuery, router, refreshTick]);
+
+  function clearFilters() {
+    setQuery("");
+    setDebouncedQuery("");
+    setBrokerType("all");
+  }
+
+  const hasFilters = debouncedQuery !== "" || brokerType !== "all";
 
   return (
     <AppShell>
+      <CreateBrokerModal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onCreated={() => setRefreshTick((t) => t + 1)}
+      />
       <VStack align="stretch" gap="10">
-        <Box>
-          <Heading
-            as="h1"
-            fontFamily="Georgia, serif"
-            fontSize={{ base: "44px", md: "64px" }}
-            letterSpacing="-0.035em"
-            color="#d7e2fb"
-          >
-            Institutional Brokers
-          </Heading>
-          <Text mt="4" maxW="680px" color="#8696ad" lineHeight="1.8">
-            Search, filter, and open broker records from the curated provider
-            directory.
-          </Text>
-        </Box>
-
-        <VStack align="stretch" maxW="820px" gap="5">
-          <Flex
-            as="label"
-            h="14"
-            align="center"
-            gap="4"
-            rounded="md"
-            bg="#0b1a2f"
-            px="5"
-            color="#8da0bf"
-            border="1px solid rgba(255,255,255,0.03)"
-          >
-            <SearchIcon />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search broker by name..."
-              variant="plain"
-              p="0"
-              color="#c6d5ee"
-              _placeholder={{ color: "#56677f" }}
-            />
-          </Flex>
-
-          <HStack flexWrap="wrap" gap="3">
-            <Text
-              mr="2"
-              color="#62728a"
-              fontSize="10px"
-              fontWeight="700"
-              letterSpacing="0.22em"
-              textTransform="uppercase"
+        <Flex align="flex-start" justify="space-between" gap="6" wrap="wrap">
+          <Box>
+            <Heading
+              as="h1"
+              fontFamily="Georgia, serif"
+              fontSize={{ base: "44px", md: "64px" }}
+              letterSpacing="-0.035em"
+              color="#d7e2fb"
             >
-              Broker Type:
+              Institutional Brokers
+            </Heading>
+            <Text mt="4" maxW="680px" color="#8696ad" lineHeight="1.8">
+              Search, filter, and open broker records from the curated provider
+              directory.
             </Text>
-            {brokerTypes.map((type) => (
-              <Button
-                key={type}
-                h="10"
-                rounded="lg"
-                bg={brokerType === type ? "#b8cffb" : "#12233a"}
-                px="5"
-                color={brokerType === type ? "#10213a" : "#9eacc4"}
-                fontSize="12px"
-                fontWeight="600"
-                textTransform="uppercase"
-                onClick={() => setBrokerType(type)}
-                _hover={{
-                  bg: brokerType === type ? "#c8dbff" : "#1a2d49",
-                  color: brokerType === type ? "#10213a" : "white",
+          </Box>
+          {isAuthenticated ? (
+            <Button
+              mt={{ base: "0", md: "3" }}
+              flexShrink={0}
+              bg="#aac8fb"
+              color="#10213a"
+              fontWeight="700"
+              fontSize="13px"
+              px="5"
+              h="10"
+              rounded="lg"
+              _hover={{ bg: "white" }}
+              onClick={() => setIsModalOpen(true)}
+            >
+              + Create Broker
+            </Button>
+          ) : null}
+        </Flex>
+
+        <VStack align="stretch" maxW="820px" gap="4">
+          <Box
+            position="relative"
+            rounded="xl"
+            bg="#0b1928"
+            border="1px solid #1a2f4a"
+            _focusWithin={{ border: "1px solid #3a5a8a", boxShadow: "0 0 0 3px rgba(100,160,255,0.08)" }}
+            transition="box-shadow 0.15s, border-color 0.15s"
+          >
+            <Flex align="center" h="14" px="5" gap="3">
+              <Box color="#3d5a7a" flexShrink={0}>
+                <SearchIcon />
+              </Box>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search broker by name..."
+                style={{
+                  flex: 1,
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "#c6d5ee",
+                  fontSize: "14px",
+                  caretColor: "#7ab0f5",
                 }}
-              >
-                {type}
-              </Button>
-            ))}
+                className="broker-search-input"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  style={{
+                    flexShrink: 0,
+                    background: "transparent",
+                    border: "none",
+                    color: "#3d5573",
+                    fontSize: "20px",
+                    lineHeight: 1,
+                    cursor: "pointer",
+                    padding: "2px 4px",
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </Flex>
+          </Box>
+
+          <HStack flexWrap="wrap" gap="2" pt="1">
+            {brokerTypes.map((type) => {
+              const active = brokerType === type;
+              return (
+                <Button
+                  key={type}
+                  onClick={() => setBrokerType(type)}
+                  h="8"
+                  px="4"
+                  rounded="full"
+                  bg={active ? "#1e3d6b" : "transparent"}
+                  color={active ? "#a8caff" : "#4a6280"}
+                  fontSize="11px"
+                  fontWeight="700"
+                  letterSpacing="0.1em"
+                  textTransform="uppercase"
+                  border={active ? "1px solid #2e5490" : "1px solid #1a2f4a"}
+                  transition="all 0.12s"
+                  _hover={{
+                    bg: active ? "#234776" : "#0f1f35",
+                    color: active ? "#c5daff" : "#8da0bf",
+                    borderColor: active ? "#3a5f9a" : "#253d5c",
+                  }}
+                >
+                  {type}
+                </Button>
+              );
+            })}
           </HStack>
         </VStack>
 
@@ -238,6 +385,8 @@ export default function BrokerListPage() {
           <Box rounded="md" bg="#241324" p="5" color="#ffb7c5">
             {error}
           </Box>
+        ) : brokers.length === 0 ? (
+          <EmptyState hasFilters={hasFilters} onClear={clearFilters} />
         ) : (
           <Grid
             gap="8"
@@ -287,7 +436,7 @@ export default function BrokerListPage() {
                     fontSize="24px"
                     color="#d8e3f7"
                   >
-                    <Link href={`/broker/${broker.slug}`} _hover={{ color: "#b8cffb" }}>
+                    <Link href={`/broker/${broker.slug}`} color="inherit" _hover={{ color: "#b8cffb" }}>
                       {broker.name}
                     </Link>
                   </Heading>

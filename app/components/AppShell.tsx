@@ -8,10 +8,10 @@ import {
   hasAuthToken,
   subscribeAuthToken,
 } from "@/lib/client-auth";
+import { ToastContainer } from "@/lib/toaster";
 
 const authedNavItems = [
   { label: "Brokers", href: "/" },
-  { label: "Create", href: "/create" },
 ];
 
 const publicNavItems = [
@@ -121,6 +121,8 @@ export function AppShell({
         >
           {children}
         </Flex>
+
+        <ToastContainer />
 
         <Flex
           as="footer"

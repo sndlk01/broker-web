@@ -23,6 +23,14 @@ a {
   text-decoration: none;
 }
 
+.broker-search-input::placeholder {
+  color: #3d5573;
+}
+
+.broker-search-input:focus {
+  outline: none;
+}
+
 .broker-image {
   position: absolute;
   inset: 0;

@@ -12,9 +12,7 @@ import {
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { AppShell } from "../components/AppShell";
-
-const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3030/api/web";
+import { register } from "@/lib/api";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -36,21 +34,14 @@ export default function RegisterPage() {
       return;
     }
 
-    const response = await fetch(`${apiBaseUrl}/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ full_name: fullName, email, password }),
-    });
-    const data = await response.json();
-
-    setSubmitting(false);
-
-    if (!response.ok) {
-      setMessage(data.message ?? "Register failed.");
-      return;
+    try {
+      await register({ full_name: fullName, email, password });
+      router.push("/login");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Register failed.");
+    } finally {
+      setSubmitting(false);
     }
-
-    router.push("/login");
   }
 
   return (
@@ -69,7 +60,13 @@ export default function RegisterPage() {
           Create an account, then sign in to submit broker data.
         </Text>
 
-        <VStack as="form" mt="8" align="stretch" gap="5" onSubmit={submitRegister}>
+        <VStack
+          as="form"
+          mt="8"
+          align="stretch"
+          gap="5"
+          onSubmit={submitRegister}
+        >
           <Box>
             <Text mb="2" color="#aebbd1" fontSize="13px" fontWeight="700">
               Full name
