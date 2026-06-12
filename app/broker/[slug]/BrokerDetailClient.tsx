@@ -167,7 +167,7 @@ function DetailRow({
   isLink = false,
 }: {
   label: string;
-  value: string;
+  value: string | number;
   isLink?: boolean;
 }) {
   return (
@@ -181,7 +181,7 @@ function DetailRow({
         {label}
       </Text>
       {isLink ? (
-        <Link href={value} color="#b9d0fb" wordBreak="break-word">
+        <Link href={String(value)} color="#b9d0fb" wordBreak="break-word">
           {value}
         </Link>
       ) : (

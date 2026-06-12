@@ -15,24 +15,26 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "./components/AppShell";
-import { CreateBrokerModal } from "./components/CreateBrokerModal";
 import { ApiError, listBrokers } from "@/lib/api";
-import { clearAuthToken, getAuthToken, hasAuthToken, subscribeAuthToken } from "@/lib/client-auth";
+import { clearAuthToken, getAuthToken } from "@/lib/client-auth";
 import type { Broker, BrokerType } from "@/lib/types";
 
+const editableBrokerTypes: BrokerType[] = ["cfd", "bond", "stock", "crypto"];
 const brokerTypes: Array<BrokerType | "all"> = [
   "all",
-  "cfd",
-  "bond",
-  "stock",
-  "crypto",
+  ...editableBrokerTypes,
 ];
 
 function SearchIcon() {
   return (
-    <Box as="svg" viewBox="0 0 24 24" aria-hidden="true" boxSize="4">
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      width="16"
+      height="16"
+    >
       <path
         d="m21 21-4.35-4.35m1.35-5.15a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z"
         fill="none"
@@ -41,7 +43,7 @@ function SearchIcon() {
         strokeLinejoin="round"
         strokeWidth="2"
       />
-    </Box>
+    </svg>
   );
 }
 
@@ -93,21 +95,21 @@ function EmptyState({
       border="1px dashed #1e3454"
       color="#536780"
     >
-      <Box
-        as="svg"
+      <svg
         viewBox="0 0 24 24"
-        boxSize="10"
+        width="40"
+        height="40"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
-        opacity={0.4}
+        style={{ opacity: 0.4 }}
       >
         <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
         <rect x="9" y="3" width="6" height="4" rx="1" />
         <path d="M9 12h6M9 16h4" />
-      </Box>
+      </svg>
       <Box textAlign="center">
         <Text fontWeight="600" color="#7889a4" mb="1">
           {hasFilters ? "No brokers match your search" : "No brokers yet"}
@@ -129,21 +131,9 @@ function EmptyState({
           Clear filters
         </Button>
       ) : (
-        <Link
-          href="/create"
-          display="inline-flex"
-          alignItems="center"
-          h="9"
-          px="5"
-          rounded="md"
-          bg="#aac8fb"
-          color="#10213a"
-          fontSize="13px"
-          fontWeight="600"
-          _hover={{ bg: "white", textDecoration: "none" }}
-        >
-          Create broker
-        </Link>
+        <Text fontSize="13px" color="#7889a4">
+          Broker records will appear here once they are published.
+        </Text>
       )}
     </Flex>
   );
@@ -157,27 +147,25 @@ export default function BrokerListPage() {
   const [brokerType, setBrokerType] = useState<BrokerType | "all">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [refreshTick, setRefreshTick] = useState(0);
-  const isAuthenticated = useSyncExternalStore(subscribeAuthToken, hasAuthToken, () => false);
-  const didInitRef = useRef(false);
 
-  // Read initial search/filter from URL on mount
+  // Read initial search/filter from URL after hydration.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const search = params.get("search") ?? "";
-    const type = params.get("type") as BrokerType | null;
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const search = params.get("search") ?? "";
+      const type = params.get("type");
 
-    if (search) {
-      setQuery(search);
-      setDebouncedQuery(search);
-    }
+      if (search) {
+        setQuery(search);
+        setDebouncedQuery(search);
+      }
 
-    if (type && (["cfd", "bond", "stock", "crypto"] as string[]).includes(type)) {
-      setBrokerType(type);
-    }
+      if (editableBrokerTypes.includes(type as BrokerType)) {
+        setBrokerType(type as BrokerType);
+      }
+    }, 0);
 
-    didInitRef.current = true;
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Debounce query → debouncedQuery
@@ -244,7 +232,7 @@ export default function BrokerListPage() {
     return () => {
       cancelled = true;
     };
-  }, [brokerType, debouncedQuery, router, refreshTick]);
+  }, [brokerType, debouncedQuery, router]);
 
   function clearFilters() {
     setQuery("");
@@ -256,11 +244,6 @@ export default function BrokerListPage() {
 
   return (
     <AppShell>
-      <CreateBrokerModal
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onCreated={() => setRefreshTick((t) => t + 1)}
-      />
       <VStack align="stretch" gap="10">
         <Flex align="flex-start" justify="space-between" gap="6" wrap="wrap">
           <Box>
@@ -278,23 +261,6 @@ export default function BrokerListPage() {
               directory.
             </Text>
           </Box>
-          {isAuthenticated ? (
-            <Button
-              mt={{ base: "0", md: "3" }}
-              flexShrink={0}
-              bg="#aac8fb"
-              color="#10213a"
-              fontWeight="700"
-              fontSize="13px"
-              px="5"
-              h="10"
-              rounded="lg"
-              _hover={{ bg: "white" }}
-              onClick={() => setIsModalOpen(true)}
-            >
-              + Create Broker
-            </Button>
-          ) : null}
         </Flex>
 
         <VStack align="stretch" maxW="820px" gap="4">

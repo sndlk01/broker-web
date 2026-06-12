@@ -24,7 +24,7 @@ export default function RegisterPage() {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  async function submitRegister(event: FormEvent<HTMLFormElement>) {
+  async function submitRegister(event: FormEvent) {
     event.preventDefault();
     setSubmitting(true);
     setMessage("");

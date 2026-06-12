@@ -11,17 +11,16 @@ import {
   DialogPositioner,
   DialogRoot,
   DialogTitle,
-  Heading,
   Input,
   Text,
   Textarea,
   VStack,
 } from "@chakra-ui/react";
 import { FormEvent, useRef, useState } from "react";
-import { ApiError, createBroker } from "@/lib/api";
+import { ApiError, createBroker, updateBroker } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/client-auth";
 import { toaster } from "@/lib/toaster";
-import type { BrokerType } from "@/lib/types";
+import type { Broker, BrokerPayload, BrokerType } from "@/lib/types";
 import { useRouter } from "next/navigation";
 
 const brokerTypes: BrokerType[] = ["cfd", "bond", "stock", "crypto"];
@@ -37,20 +36,24 @@ function slugify(value: string) {
 interface Props {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: (broker: Broker) => void;
+  broker?: Broker | null;
 }
 
-export function CreateBrokerModal({ open, onClose, onCreated }: Props) {
+export function CreateBrokerModal({ open, onClose, onSaved, broker }: Props) {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [description, setDescription] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
-  const [website, setWebsite] = useState("");
-  const [brokerType, setBrokerType] = useState<BrokerType>("cfd");
+  const isEditing = Boolean(broker);
+  const [name, setName] = useState(broker?.name ?? "");
+  const [slug, setSlug] = useState(broker?.slug ?? "");
+  const [description, setDescription] = useState(broker?.description ?? "");
+  const [logoUrl, setLogoUrl] = useState(broker?.logo_url ?? "");
+  const [website, setWebsite] = useState(broker?.website ?? "");
+  const [brokerType, setBrokerType] = useState<BrokerType>(
+    broker?.broker_type ?? "cfd",
+  );
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const slugEditedRef = useRef(false);
+  const slugEditedRef = useRef(Boolean(broker));
 
   function reset() {
     setName("");
@@ -80,7 +83,7 @@ export function CreateBrokerModal({ open, onClose, onCreated }: Props) {
     setSlug(value);
   }
 
-  async function submitBroker(event: FormEvent<HTMLFormElement>) {
+  async function submitBroker(event: FormEvent) {
     event.preventDefault();
 
     const token = getAuthToken();
@@ -94,21 +97,30 @@ export function CreateBrokerModal({ open, onClose, onCreated }: Props) {
     setMessage("");
 
     try {
-      await createBroker(
-        { name, slug, description, logo_url: logoUrl, website, broker_type: brokerType },
-        { token },
-      );
+      const payload: BrokerPayload = {
+        name,
+        slug,
+        description,
+        logo_url: logoUrl,
+        website,
+        broker_type: brokerType,
+      };
+      const savedBroker = broker
+        ? await updateBroker(broker.id, payload, { token })
+        : await createBroker(payload, { token });
 
       toaster.create({
-        title: "Broker created",
-        description: `"${name}" has been added to the directory.`,
+        title: isEditing ? "Broker updated" : "Broker created",
+        description: isEditing
+          ? `"${name}" has been updated.`
+          : `"${name}" has been added to the directory.`,
         type: "success",
         duration: 3000,
       });
 
       reset();
       onClose();
-      onCreated();
+      onSaved(savedBroker);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         clearAuthToken();
@@ -116,7 +128,11 @@ export function CreateBrokerModal({ open, onClose, onCreated }: Props) {
         router.push("/login?next=/");
         return;
       }
-      setMessage(error instanceof Error ? error.message : "Unable to create broker.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : `Unable to ${isEditing ? "update" : "create"} broker.`,
+      );
     } finally {
       setSubmitting(false);
     }
@@ -125,14 +141,13 @@ export function CreateBrokerModal({ open, onClose, onCreated }: Props) {
   return (
     <DialogRoot
       open={open}
-      onOpenChange={(e) => { if (!e.open) handleClose(); }}
+      onOpenChange={(e) => {
+        if (!e.open) handleClose();
+      }}
       lazyMount
       unmountOnExit
     >
-      <DialogBackdrop
-        bg="rgba(4, 12, 24, 0.75)"
-        backdropFilter="blur(4px)"
-      />
+      <DialogBackdrop bg="rgba(4, 12, 24, 0.75)" backdropFilter="blur(4px)" />
       <DialogPositioner>
         <DialogContent
           bg="#0a1929"
@@ -145,18 +160,14 @@ export function CreateBrokerModal({ open, onClose, onCreated }: Props) {
           maxH="90dvh"
           overflowY="auto"
         >
-          <DialogHeader
-            borderBottom="1px solid #0f2238"
-            px="7"
-            py="5"
-          >
+          <DialogHeader borderBottom="1px solid #0f2238" px="7" py="5">
             <DialogTitle
               fontFamily="Georgia, serif"
               fontSize="22px"
               color="#d8e3f7"
               letterSpacing="-0.02em"
             >
-              Create Broker
+              {isEditing ? "Edit Broker" : "Create Broker"}
             </DialogTitle>
             <DialogCloseTrigger
               color="#4a6280"
@@ -232,27 +243,34 @@ export function CreateBrokerModal({ open, onClose, onCreated }: Props) {
               </FieldRow>
 
               <FieldRow label="Broker type">
-                <Box
-                  as="select"
+                <select
                   value={brokerType}
                   onChange={(e) => setBrokerType(e.target.value as BrokerType)}
-                  h="10"
-                  w="full"
-                  rounded="md"
-                  bg="#071320"
-                  border="1px solid #1a2f4a"
-                  color="#d7e2fb"
-                  px="3"
-                  fontSize="14px"
                   required
+                  style={{
+                    width: "100%",
+                    height: "40px",
+                    borderRadius: "6px",
+                    background: "#071320",
+                    border: "1px solid #1a2f4a",
+                    color: "#d7e2fb",
+                    padding: "0 12px",
+                    fontSize: "14px",
+                  }}
                 >
                   {brokerTypes.map((t) => (
-                    <option key={t} value={t}>{t}</option>
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
                   ))}
-                </Box>
+                </select>
               </FieldRow>
 
-              {message ? <Text color="#ffb7c5" fontSize="13px">{message}</Text> : null}
+              {message ? (
+                <Text color="#ffb7c5" fontSize="13px">
+                  {message}
+                </Text>
+              ) : null}
 
               <Box pt="2" display="flex" gap="3" justifyContent="flex-end">
                 <Button
@@ -273,7 +291,7 @@ export function CreateBrokerModal({ open, onClose, onCreated }: Props) {
                   _hover={{ bg: "white" }}
                   px="6"
                 >
-                  Submit
+                  {isEditing ? "Save Changes" : "Submit"}
                 </Button>
               </Box>
             </VStack>
@@ -284,10 +302,23 @@ export function CreateBrokerModal({ open, onClose, onCreated }: Props) {
   );
 }
 
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+function FieldRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <Box>
-      <Text mb="2" color="#7a96b8" fontSize="12px" fontWeight="700" letterSpacing="0.08em" textTransform="uppercase">
+      <Text
+        mb="2"
+        color="#7a96b8"
+        fontSize="12px"
+        fontWeight="700"
+        letterSpacing="0.08em"
+        textTransform="uppercase"
+      >
         {label}
       </Text>
       {children}

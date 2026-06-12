@@ -23,7 +23,10 @@ import {
 } from "@/lib/client-auth";
 import { ToastContainer } from "@/lib/toaster";
 
-const authedNavItems = [{ label: "Brokers", href: "/" }];
+const authedNavItems = [
+  { label: "Brokers", href: "/" },
+  { label: "Manage", href: "/manage" },
+];
 
 const publicNavItems = [
   { label: "Login", href: "/login" },
@@ -50,12 +53,7 @@ export function AppShell({
     () => null,
   );
 
-  const isProtectedPath =
-    pathname === "/" ||
-    pathname === "/create" ||
-    pathname.startsWith("/broker/");
-  const showAuthenticatedNav = isAuthenticated || isProtectedPath;
-  const navItems = showAuthenticatedNav ? authedNavItems : publicNavItems;
+  const navItems = isAuthenticated ? authedNavItems : publicNavItems;
 
   const initial = userEmail ? userEmail[0].toUpperCase() : "?";
 
@@ -112,7 +110,7 @@ export function AppShell({
             })}
           </HStack>
 
-          {showAuthenticatedNav ? (
+          {isAuthenticated ? (
             <MenuRoot>
               <MenuTrigger
                 bg="transparent"

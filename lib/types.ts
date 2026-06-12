@@ -1,7 +1,7 @@
 export type BrokerType = "cfd" | "bond" | "stock" | "crypto";
 
 export type Broker = {
-  id: string;
+  id: string | number;
   name: string;
   slug: string;
   description: string;

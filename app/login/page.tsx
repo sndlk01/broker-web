@@ -23,7 +23,7 @@ export default function LoginPage() {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  async function submitLogin(event: FormEvent<HTMLFormElement>) {
+  async function submitLogin(event: FormEvent) {
     event.preventDefault();
     setSubmitting(true);
     setMessage("");
@@ -46,7 +46,7 @@ export default function LoginPage() {
         duration: 3000,
       });
       const nextPath = new URLSearchParams(window.location.search).get("next");
-      router.push(nextPath ?? "/create");
+      router.push(nextPath ?? "/manage");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Login failed.");
     } finally {

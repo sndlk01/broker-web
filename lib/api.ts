@@ -153,3 +153,27 @@ export async function createBroker(
 
   return unwrapBroker(responsePayload);
 }
+
+export async function updateBroker(
+  id: Broker["id"],
+  payload: BrokerPayload,
+  options: { token?: string | null } = {},
+) {
+  const responsePayload = await request(`/brokers/${encodeURIComponent(String(id))}`, {
+    method: "PUT",
+    body: payload,
+    token: options.token,
+  });
+
+  return unwrapBroker(responsePayload);
+}
+
+export async function deleteBroker(
+  id: Broker["id"],
+  options: { token?: string | null } = {},
+) {
+  return request(`/brokers/${encodeURIComponent(String(id))}`, {
+    method: "DELETE",
+    token: options.token,
+  });
+}
